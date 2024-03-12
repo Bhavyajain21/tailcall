@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_graphql_value::ConstValue;
 use reqwest::Request;
+use hyper::HeaderMap;
 
 use super::{CacheKey, Eval, EvaluationContext, ResolverContextLike};
 use crate::config::group_by::GroupBy;
@@ -134,7 +135,8 @@ fn set_cache_control<'ctx, Ctx: ResolverContextLike<'ctx>>(
 ) {
     if ctx.req_ctx.server.get_enable_cache_control() && res.status.is_success() {
         if let Some(policy) = cache_policy(res) {
-            ctx.req_ctx.set_cache_control(policy);
+            let set_cookie_headers = HeaderMap::new();
+            ctx.req_ctx.set_cache_control(policy, &set_cookie_headers);
         }
     }
 }

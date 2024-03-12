@@ -5,6 +5,7 @@ use async_graphql_value::ConstValue;
 use cache_control::{Cachability, CacheControl};
 use derive_setters::Setters;
 use hyper::HeaderMap;
+use hyper::header::SET_COOKIE;
 
 use crate::blueprint::{Server, Upstream};
 use crate::data_loader::DataLoader;
@@ -25,6 +26,7 @@ pub struct RequestContext {
     pub min_max_age: Arc<Mutex<Option<i32>>>,
     pub cache_public: Arc<Mutex<Option<bool>>>,
     pub runtime: TargetRuntime,
+    pub set_cookie_headers: Arc<Mutex<Vec<String>>>,
 }
 
 impl RequestContext {
@@ -33,6 +35,10 @@ impl RequestContext {
     }
     pub fn get_min_max_age(&self) -> Option<i32> {
         *self.min_max_age.lock().unwrap()
+    }
+
+    pub fn add_set_cookie_header(&self, header_value: &str) {
+        self.set_cookie_headers.lock().unwrap().push(header_value.to_string());
     }
 
     pub fn set_cache_public_false(&self) {
@@ -62,13 +68,18 @@ impl RequestContext {
         }
     }
 
-    pub fn set_cache_control(&self, cache_policy: CacheControl) {
+    pub fn set_cache_control(&self, cache_policy: CacheControl, set_cookie_headers: &HeaderMap) {
         if let Some(max_age) = cache_policy.max_age {
             self.set_min_max_age(max_age.as_secs() as i32);
         }
         self.set_cache_visibility(&cache_policy.cachability);
         if Some(Cachability::NoCache) == cache_policy.cachability {
             self.set_min_max_age(-1);
+        }
+        for (key, value) in set_cookie_headers {
+            if key == SET_COOKIE {
+                self.add_set_cookie_header(value.to_str().unwrap_or_default());
+            }
         }
     }
 
@@ -103,6 +114,7 @@ impl From<&AppContext> for RequestContext {
             min_max_age: Arc::new(Mutex::new(None)),
             cache_public: Arc::new(Mutex::new(None)),
             runtime: app_ctx.runtime.clone(),
+            set_cookie_headers: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -147,6 +159,17 @@ mod test {
         assert_eq!(req_ctx.get_min_max_age(), Some(60));
     }
 
+    #[test]
+    fn test_update_set_cookie_headers() {
+        let req_ctx = RequestContext::default();
+        req_ctx.add_set_cookie_header("cookie1=value1");
+        req_ctx.add_set_cookie_header("cookie2=value2");
+        assert_eq!(
+            req_ctx.set_cookie_headers.lock().unwrap(),
+            &vec!["cookie1=value1", "cookie2=value2"]
+        );
+    }
+    
     #[test]
     fn test_update_max_age_greater_than_existing() {
         let req_ctx = RequestContext::default();
