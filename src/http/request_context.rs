@@ -147,6 +147,7 @@ mod test {
                 grpc_data_loaders: Arc::new(vec![]),
                 min_max_age: Arc::new(Mutex::new(None)),
                 cache_public: Arc::new(Mutex::new(None)),
+                set_cookie_headers: Arc::new(Mutex::new(Vec::new())),
             }
         }
     }
@@ -169,7 +170,7 @@ mod test {
             &vec!["cookie1=value1", "cookie2=value2"]
         );
     }
-    
+
     #[test]
     fn test_update_max_age_greater_than_existing() {
         let req_ctx = RequestContext::default();
